@@ -20,8 +20,10 @@ public:
   virtual void load( const rviz_common::Config& config );
   virtual void save( rviz_common::Config config ) const;
 
+protected Q_SLOTS:
+  void setRobotName();
 
-  void setRobotName(const std::string text);
+  void ProcessRobot(QString text);
 
   // Here we declare some internal slots.
 protected:

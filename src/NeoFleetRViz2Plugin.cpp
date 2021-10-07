@@ -25,15 +25,29 @@ NeoFleetRViz2Plugin::NeoFleetRViz2Plugin( QWidget* parent )
   topic_layout->addWidget( output_status_editor_ );
 
   // Lay out the topic field above the control widget.
+  QTimer* output_timer = new QTimer( this );
+  connect( output_status_editor_, SIGNAL( editingFinished() ), this, SLOT( setRobotName() ));
+  // connect( output_timer, SIGNAL( timeout() ), this, SLOT( setRobotName(std::string) ));
+
+  // Start the timer.
+  output_timer->start( 100 );
+
   QVBoxLayout* layout = new QVBoxLayout;
   layout->addLayout( topic_layout );
   setLayout( layout );
 }
 
 
-void NeoFleetRViz2Plugin::setRobotName(const std::string text) {
-	QString qmsgtext(text.c_str());
-	output_status_editor_->setText(qmsgtext);
+void NeoFleetRViz2Plugin::setRobotName() {
+	// QString qmsgtext(text.c_str());
+	ProcessRobot(output_status_editor_->text());
+  // std::cout<<"Im here"<<std::endl;
+  // ProcessRobot(text);
+}
+
+void NeoFleetRViz2Plugin::ProcessRobot(QString text) {
+  std::cout << text.toStdString() << std::endl;
+  // std::cout<<"robot name:"<<text<<std::endl;
 }
 
 // Save all configuration data from this panel to the given
