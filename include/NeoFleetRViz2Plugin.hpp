@@ -52,8 +52,6 @@ public:
     RosHelper Robot1{node, "robot1"};
     RosHelper Robot2{node, "robot2"};
 
-
- 
 public slots:
     void process();
  

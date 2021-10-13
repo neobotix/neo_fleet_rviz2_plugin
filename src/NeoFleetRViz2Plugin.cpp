@@ -31,6 +31,27 @@ Worker::~Worker() {
 // Start processing data.
 void Worker::process() {
     // allocate resources using new here
+    std::map<std::string, std::vector<std::string> > get_topic = node->get_topic_names_and_types(); 
+    std::vector <std::string> robot_namespaces;
+    std::string robots = "";
+    std::string tmp = "";
+
+    // Store the robots for the drop down list
+    for (auto it = get_topic.begin(); it != get_topic.end(); it++) {
+      int dslash = 0;
+      for (int i = 0; i<=(it->first).size(); i++) {
+        robots += it->first[i];
+        if (it->first[i] == '/' && dslash != 2) {
+            dslash++;
+            if(dslash == 2 and tmp != robots) {
+              robot_namespaces.push_back(robots);
+            }
+        }
+      }
+      tmp = robots;
+      robots = "";
+    }
+
     m_initial_pose = node->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>("initialpose", 1, std::bind(&Worker::pose_callback, this, std::placeholders::_1));
     rclcpp::Rate loop_rate(10);
     while(rclcpp::ok()) {
