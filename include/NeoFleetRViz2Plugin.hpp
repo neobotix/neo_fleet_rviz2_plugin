@@ -7,9 +7,12 @@
 #include <rviz_common/config.hpp>
 #include "rviz_default_plugins/tools/goal_pose/goal_tool.hpp"
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 #include <QPushButton>
 #include <QThread>
 #include <QVBoxLayout>
+#include <QStringList>
+#include <QComboBox>
 #include <QLabel>
 
 
@@ -21,18 +24,29 @@ class RosHelper {
 private:
   rclcpp::Node::SharedPtr node;
 
-  std::string robot_name;
-
 public:
+    geometry_msgs::msg::PoseWithCovariance m_pose;
+
+    rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr m_pub_loc_pose;
+    bool m_robotLocalization = false;
+    std::string robot_name;
+
+    // Default Constructor
+    RosHelper(){}
+
     RosHelper(rclcpp::Node::SharedPtr node1, std::string robot_name_ ){
         node = node1;
         robot_name = robot_name_;
-        map_pose = node->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>
-        (robot_name + "/map_pose", 1, std::bind(&RosHelper::map_pose_callback, this, std::placeholders::_1));
-    }
-    rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr map_pose;
-    void map_pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr /*pose*/) {
+        m_pub_loc_pose = node->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>
+        (robot_name + "initialpose", 10);
+        odom_subscriber = node->create_subscription<nav_msgs::msg::Odometry>(robot_name 
+            + "odom", 1, std::bind(&RosHelper::map_pose_callback, this, std::placeholders::_1));
         
+    }
+    rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_subscriber;
+    // rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr map_pose_subscriber;
+    void map_pose_callback(const nav_msgs::msg::Odometry::SharedPtr pose) {
+        m_pose = pose->pose;
     }
 };
 
@@ -49,8 +63,9 @@ public:
     
     rclcpp::Node::SharedPtr node = rclcpp::Node::make_shared("neo_fleet_thread");
 
-    RosHelper Robot1{node, "robot1"};
-    RosHelper Robot2{node, "robot2"};
+    std::shared_ptr<RosHelper> Robot1 = std::make_shared<RosHelper>(node, "/mp_4000/");
+    std::shared_ptr<RosHelper> Robot2 = std::make_shared<RosHelper>(node, "/mp_4001/");
+    std::vector <std::string> robot_namespaces;
 
 public slots:
     void process();
@@ -79,6 +94,8 @@ public:
   QThread* thread = new QThread;
   Worker* worker = new Worker();
 
+  std::shared_ptr<RosHelper> robot_tmp;
+
 public slots:
     void update();
 
@@ -95,8 +112,6 @@ protected Q_SLOTS:
 
   void handleButton2();
 
-  void ProcessRobot(QString text);
-
   void subscribe_topics();
     
   // Here we declare some internal slots.
@@ -107,6 +122,8 @@ protected:
   QLabel* X_loc_value = new QLabel;
   QLabel* loc_status = new QLabel;
   QLabel* goal_status = new QLabel;
+  QLabel* selected_robot = new QLabel;
+
 
   bool mLocalization = false;
 
@@ -119,9 +136,16 @@ protected:
   // The current name of the output topic.
   QString output_status_;
 
+  // List of robots available
+  QStringList robot_list;
+
+  QComboBox* combo;
+
   std::string robot_name;
 
   std::thread thread_func;
+
+  bool process_combo = false;
 };
 
 } // neo_fleet_rviz2_plugin namespace
