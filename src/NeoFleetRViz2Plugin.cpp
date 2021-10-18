@@ -40,7 +40,9 @@ void Worker::process() {
     for (auto it = get_topic.begin(); it != get_topic.end(); it++) {
       int dslash = 0;
       for (long unsigned int i = 0; i < (it->first).size(); i++) {
-        robots += it->first[i];
+        if (it->first[i] != '/') {
+          robots += it->first[i];  
+        }
         if (it->first[i] == '/' && dslash != 2) {
             dslash++;
             if(dslash == 2 and tmp != robots) {
@@ -52,7 +54,9 @@ void Worker::process() {
       robots = "";
     }
 
-    m_initial_pose = node->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>("initialpose", 1, std::bind(&Worker::pose_callback, this, std::placeholders::_1));
+    m_initial_pose = node->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>("/initialpose", 1, std::bind(&Worker::pose_callback, this, std::placeholders::_1));
+    m_goal_pose = node->create_subscription<geometry_msgs::msg::PoseStamped>("/goal_pose", 1, std::bind(&Worker::goal_callback, this, std::placeholders::_1));
+
     rclcpp::Rate loop_rate(10);
     while(rclcpp::ok()) {
       loop_rate.sleep();   
@@ -69,24 +73,18 @@ NeoFleetRViz2Plugin::NeoFleetRViz2Plugin( QWidget* parent )
   output_status_editor_ = new QLineEdit;
   QTimer* output_timer = new QTimer( this );
 
+  QPushButton* m_button1 = new QPushButton("RViz", this);
+
   combo = new QComboBox(this);
   robot_tmp = worker->Robot1;
-
-  // Creating buttons
-  QPushButton* m_button1 = new QPushButton("Localization Mode", this);
-  QPushButton* m_button2 = new QPushButton("Goal Mode", this);
-  QPushButton* m_button3 = new QPushButton("Select Goal Pose", this);
 
   topic_layout->addWidget( new QLabel( "Select the target robot:" ));
   topic_layout->addWidget( combo );
   topic_layout->addWidget( m_button1 );
-  topic_layout->addWidget( m_button2 );
-  // Connect button signal to appropriate slot
-  connect(m_button1, &QPushButton::released, this, &NeoFleetRViz2Plugin::handleButton1);
-  connect(m_button2, &QPushButton::released, this, &NeoFleetRViz2Plugin::handleButton2);
 
   // Lay out the topic field above the control widget.
   connect( combo, QOverload<int>::of(&QComboBox::activated), this, &NeoFleetRViz2Plugin::setRobotName );
+  connect(m_button1, &QPushButton::released, this, &NeoFleetRViz2Plugin::handleButton1);
   // connect( output_timer, SIGNAL( timeout() ), this, SLOT( setRobotName(std::string) ));
 
   // Start the timer.
@@ -95,20 +93,9 @@ NeoFleetRViz2Plugin::NeoFleetRViz2Plugin( QWidget* parent )
   QVBoxLayout* layout = new QVBoxLayout;
 
   layout->addLayout( topic_layout );
-  layout1->addWidget( m_button3 );
-  layout1->addWidget( loc_status );
-  loc_status->setText("Localization: Not done");
   layout1->addWidget( X_loc_value );
   layout1->addWidget(selected_robot);
-  goal_status->setText("Goal: Waiting for Localization to be complete");
-  layout1->addWidget( goal_status ); 
   layout->addLayout( layout1 );
-
-  QHBoxLayout* status_layout = new QHBoxLayout;
-  status_layout->addWidget( new QLabel( "Robot Status:" ));
-  QLineEdit* output_status_editor_status = new QLineEdit;
-  status_layout->addWidget( output_status_editor_status );
-  layout->addLayout( status_layout );
 
   setLayout( layout );
 
@@ -132,9 +119,13 @@ void Worker::pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::
   m_pose = pose;
 }
 
+void Worker::goal_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose ) {
+  m_goal = pose;
+}
+
 void NeoFleetRViz2Plugin::setRobotName() {
    robot_name = combo->currentText().toStdString();
-   if( robot_name == "/mp_4001/") 
+   if( robot_name == "mp_4001") 
    {
     robot_tmp = worker->Robot2;
    } else {
@@ -154,62 +145,51 @@ void NeoFleetRViz2Plugin::update() {
     process_combo = true;
   }
 
-  if(mLocalization) {
+  if(!robot_tmp->m_robotLocalization) {
     if(!worker->m_pose)
-    {
-      X_loc_value->setText("X: " + QString::number(0) + ", Y: " + QString::number(0) + ", Theta: " + QString::number(0));
-    }
+      {
+        X_loc_value->setText("X: " + QString::number(0) + ", Y: " + QString::number(0) + ", Theta: " + QString::number(0));
+        selected_robot->setText("Selected Robot: " + QString::fromStdString(robot_tmp->robot_name));
+      }
     else {
-      geometry_msgs::msg::PoseWithCovarianceStamped pub_pose;
-      loc_status->setText("Localization: Robot Localized");
-      goal_status->setText("Goal: Ready to send goals");
-      X_loc_value->setText("X: " + QString::number(worker->m_pose->pose.pose.position.x) 
-        + ", Y: " + QString::number(worker->m_pose->pose.pose.position.y)
-        + ", Theta: " + QString::number(worker->m_pose->pose.pose.orientation.z));
-      pub_pose = *worker->m_pose;
-      robot_tmp->m_pub_loc_pose->publish(pub_pose);
-      m_localization_done = true;
-      robot_tmp->m_robotLocalization = true;
-      mLocalization = false;
-    }
+        geometry_msgs::msg::PoseWithCovarianceStamped pub_pose;
+        selected_robot->setText("Selected Robot: " + QString::fromStdString(robot_tmp->robot_name));
+        X_loc_value->setText("X: " + QString::number(worker->m_pose->pose.pose.position.x) 
+          + ", Y: " + QString::number(worker->m_pose->pose.pose.position.y)
+          + ", Theta: " + QString::number(worker->m_pose->pose.pose.orientation.z));
+        pub_pose = *worker->m_pose;
+        robot_tmp->m_pub_loc_pose->publish(pub_pose);
+        m_localization_done = true;
+        robot_tmp->m_robotLocalization = true;
+        worker->m_pose = NULL;
+     }
   }
 
   if (robot_tmp->m_robotLocalization) {
-    selected_robot->setText(QString::fromStdString(robot_tmp->robot_name));
-    loc_status->setText("Localization: Robot Localized");
-      goal_status->setText("Goal: Ready to send goals");
-      X_loc_value->setText("X: " + QString::number(robot_tmp->m_pose.pose.position.x) 
+    geometry_msgs::msg::PoseStamped pub_goal_pose;
+    selected_robot->setText("Selected Robot: " + QString::fromStdString(robot_tmp->robot_name));
+    X_loc_value->setText("X: " + QString::number(robot_tmp->m_pose.pose.position.x) 
         + ", Y: " + QString::number(robot_tmp->m_pose.pose.position.y)
         + ", Theta: " + QString::number(robot_tmp->m_pose.pose.orientation.z));
+    if(worker->m_goal) {
+      pub_goal_pose = *worker->m_goal;
+      robot_tmp->m_pub_goal_pose->publish(pub_goal_pose);
+    }
   }
 }
 
 void NeoFleetRViz2Plugin::handleButton1()
 {
-  if(robot_name.size()==0) {
-    loc_status->setText("Localization: Robot not selected");
-  }
+  std::string command = "ros2 launch neo_simulation2 rviz_launch.py use_namespace:=true namespace:=";
+  command.append(robot_tmp->robot_name);
+  command.append("&");
 
-  else {
-    mLocalization = true;
-    loc_status->setText("Localization: Robot ready for Localization");
-  }
-
-}
-
-void NeoFleetRViz2Plugin::handleButton2()
-{
-  if(!m_localization_done) {
-    goal_status->setText("Goal: Waiting for Localization to be complete");
-  } else {
-    goal_status->setText("Goal: Ready to send goals");
-  }
-
+  system( command.c_str() );
 }
 
 void NeoFleetRViz2Plugin::save( rviz_common::Config config ) const
 {
-  rviz_common::Panel::save( config );
+  rviz_common::Panel::save( config);
 }
 
 // Load all configuration data for this panel from the given Config object.

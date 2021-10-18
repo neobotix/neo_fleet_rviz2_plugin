@@ -6,6 +6,7 @@
 #include <rviz_common/panel.hpp>
 #include <rviz_common/config.hpp>
 #include "rviz_default_plugins/tools/goal_pose/goal_tool.hpp"
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <QPushButton>
@@ -28,6 +29,8 @@ public:
     geometry_msgs::msg::PoseWithCovariance m_pose;
 
     rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr m_pub_loc_pose;
+    rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr m_pub_goal_pose;
+
     bool m_robotLocalization = false;
     std::string robot_name;
 
@@ -38,9 +41,11 @@ public:
         node = node1;
         robot_name = robot_name_;
         m_pub_loc_pose = node->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>
-        (robot_name + "initialpose", 10);
-        odom_subscriber = node->create_subscription<nav_msgs::msg::Odometry>(robot_name 
-            + "odom", 1, std::bind(&RosHelper::map_pose_callback, this, std::placeholders::_1));
+        ("/"+robot_name + "/initialpose", 10);
+        m_pub_goal_pose = node->create_publisher<geometry_msgs::msg::PoseStamped>
+        ("/"+robot_name + "/goal_pose", 10);
+        odom_subscriber = node->create_subscription<nav_msgs::msg::Odometry>("/"+robot_name 
+            + "/odom", 1, std::bind(&RosHelper::map_pose_callback, this, std::placeholders::_1));
         
     }
     rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_subscriber;
@@ -58,13 +63,18 @@ public:
     Worker();
     ~Worker();
     rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr m_initial_pose;
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr m_goal_pose;
     geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr m_pose;
+    geometry_msgs::msg::PoseStamped::SharedPtr m_goal;
+
     void pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose);
-    
+    void goal_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose );
+
+
     rclcpp::Node::SharedPtr node = rclcpp::Node::make_shared("neo_fleet_thread");
 
-    std::shared_ptr<RosHelper> Robot1 = std::make_shared<RosHelper>(node, "/mp_4000/");
-    std::shared_ptr<RosHelper> Robot2 = std::make_shared<RosHelper>(node, "/mp_4001/");
+    std::shared_ptr<RosHelper> Robot1 = std::make_shared<RosHelper>(node, "mp_4000");
+    std::shared_ptr<RosHelper> Robot2 = std::make_shared<RosHelper>(node, "mp_4001");
     std::vector <std::string> robot_namespaces;
 
 public slots:
@@ -120,8 +130,6 @@ protected:
   QLineEdit* output_status_editor_;
 
   QLabel* X_loc_value = new QLabel;
-  QLabel* loc_status = new QLabel;
-  QLabel* goal_status = new QLabel;
   QLabel* selected_robot = new QLabel;
 
 
