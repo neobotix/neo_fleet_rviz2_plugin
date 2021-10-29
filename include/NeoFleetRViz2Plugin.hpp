@@ -73,8 +73,8 @@ public:
 
     rclcpp::Node::SharedPtr node = rclcpp::Node::make_shared("neo_fleet_thread");
 
-    std::shared_ptr<RosHelper> Robot1 = std::make_shared<RosHelper>(node, "mp_4000");
-    std::shared_ptr<RosHelper> Robot2 = std::make_shared<RosHelper>(node, "mp_4001");
+    std::shared_ptr<RosHelper> Robot1 = std::make_shared<RosHelper>(node, "mpo_7000");
+    std::shared_ptr<RosHelper> Robot2 = std::make_shared<RosHelper>(node, "mpo_7001");
     std::vector <std::string> robot_namespaces;
 
 public slots:

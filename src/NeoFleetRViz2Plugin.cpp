@@ -125,7 +125,7 @@ void Worker::goal_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose
 
 void NeoFleetRViz2Plugin::setRobotName() {
    robot_name = combo->currentText().toStdString();
-   if( robot_name == "mp_4001") 
+   if( robot_name == "mpo_7001") 
    {
     robot_tmp = worker->Robot2;
    } else {
