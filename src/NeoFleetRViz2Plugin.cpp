@@ -173,8 +173,27 @@ void NeoFleetRViz2Plugin::update() {
         + ", Theta: " + QString::number(robot_tmp->m_pose.pose.orientation.z));
     if(worker->m_goal) {
       pub_goal_pose = *worker->m_goal;
-      robot_tmp->m_pub_goal_pose->publish(pub_goal_pose);
-    }
+      auto check_action_server_ready =
+      robot_tmp->navigation_action_client_->wait_for_action_server(std::chrono::seconds(5));
+      if (!check_action_server_ready) {
+      RCLCPP_ERROR(
+        worker->node->get_logger(),
+        "navigate_to_pose action server is not available."
+        );
+      return;
+      }
+  
+      robot_tmp->navigation_goal_.pose = pub_goal_pose;
+
+      auto send_goal_options =
+      rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SendGoalOptions();
+        send_goal_options.result_callback = [this](auto) {
+      };
+
+      auto future_goal_handle =
+       robot_tmp->navigation_action_client_->async_send_goal(robot_tmp->navigation_goal_, send_goal_options);
+
+     }
   }
 }
 

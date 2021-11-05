@@ -13,6 +13,7 @@ find_package(rclcpp_action REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(rviz_common REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav2_msgs REQUIRED)
 find_package(rviz_rendering REQUIRED)
 find_package(rviz_default_plugins REQUIRED)
 find_package(pluginlib REQUIRED)
@@ -31,6 +32,7 @@ ament_target_dependencies(${PROJECT_NAME}
   rclcpp
   tf2_ros
   rviz_common
+  nav2_msgs
   geometry_msgs
   rviz_rendering
   rviz_default_plugins
@@ -39,7 +41,7 @@ ament_target_dependencies(${PROJECT_NAME}
 target_compile_definitions(${PROJECT_NAME} PRIVATE "RVIZ_DEFAULT_PLUGINS_BUILDING_LIBRARY")
 
 # Link ament packages
-ament_target_dependencies(${PROJECT_NAME} rclcpp rviz_common geometry_msgs)
+ament_target_dependencies(${PROJECT_NAME} rclcpp rviz_common geometry_msgs nav2_msgs)
 
 # Link non ament packages
 target_link_libraries(${PROJECT_NAME} Qt5::Widgets)
