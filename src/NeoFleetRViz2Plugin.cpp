@@ -129,7 +129,7 @@ void NeoFleetRViz2Plugin::setRobotName() {
    {
     robot_tmp = worker->Robot2;
    } else {
-       robot_tmp = worker->Robot1;
+    robot_tmp = worker->Robot1;
    }
 
 }
@@ -171,7 +171,8 @@ void NeoFleetRViz2Plugin::update() {
     X_loc_value->setText("X: " + QString::number(robot_tmp->m_pose.pose.position.x) 
         + ", Y: " + QString::number(robot_tmp->m_pose.pose.position.y)
         + ", Theta: " + QString::number(robot_tmp->m_pose.pose.orientation.z));
-    if(worker->m_goal) {
+
+    if(worker->m_goal and robot_tmp->m_goalSent == false) {
       pub_goal_pose = *worker->m_goal;
       auto check_action_server_ready =
       robot_tmp->navigation_action_client_->wait_for_action_server(std::chrono::seconds(5));
@@ -187,12 +188,14 @@ void NeoFleetRViz2Plugin::update() {
 
       auto send_goal_options =
       rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SendGoalOptions();
-        send_goal_options.result_callback = [this](auto) {
+      send_goal_options.result_callback = [this](auto) {
+        robot_tmp->m_goalSent = false;
       };
 
       auto future_goal_handle =
        robot_tmp->navigation_action_client_->async_send_goal(robot_tmp->navigation_goal_, send_goal_options);
-
+      robot_tmp->m_goalSent = true;
+      worker->m_goal = NULL;
      }
   }
 }

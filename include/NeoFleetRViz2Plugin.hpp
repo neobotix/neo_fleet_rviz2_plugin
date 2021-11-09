@@ -36,6 +36,8 @@ public:
     nav2_msgs::action::NavigateToPose::Goal navigation_goal_;
 
     bool m_robotLocalization = false;
+    bool m_goalSent = false;
+
     std::string robot_name;
 
     // Default Constructor
