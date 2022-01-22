@@ -86,6 +86,14 @@ void Worker::process()
     robots = "";
   }
 
+  // Allocating ros helpers depending on the number of robots available.
+  m_robots.resize(robot_namespaces.size());
+
+  for (long unsigned int i = 0; i < m_robots.size(); i++) {
+    m_robots[i] = std::make_shared<RosHelper>(node, robot_namespaces[i]);
+    m_named_robot.insert(std::pair<std::string, std::shared_ptr<RosHelper>> (robot_namespaces[i], m_robots[i]));
+  }
+
   m_initial_pose = node->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
     "/initialpose", 1, std::bind(&Worker::pose_callback, this, std::placeholders::_1));
   m_goal_pose = node->create_subscription<geometry_msgs::msg::PoseStamped>(
@@ -109,7 +117,7 @@ NeoFleetRViz2Plugin::NeoFleetRViz2Plugin(QWidget * parent)
   QPushButton * m_button1 = new QPushButton("RViz", this);
 
   combo = new QComboBox(this);
-  robot_tmp = worker->Robot1;
+  robot_tmp = worker->m_robots[0];
 
   topic_layout->addWidget(new QLabel("Select the target robot:"));
   topic_layout->addWidget(combo);
@@ -161,10 +169,11 @@ void Worker::goal_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose
 void NeoFleetRViz2Plugin::setRobotName()
 {
   robot_name = combo->currentText().toStdString();
+  // Todo: Add a for loop for the std::map and assign the corresponding robots pointer
   if (robot_name == "mpo_7001") {
-    robot_tmp = worker->Robot2;
+    robot_tmp = worker->m_robots[0];
   } else {
-    robot_tmp = worker->Robot1;
+    robot_tmp = worker->m_robots[1];
   }
 }
 

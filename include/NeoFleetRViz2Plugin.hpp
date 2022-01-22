@@ -120,8 +120,12 @@ public:
 
   rclcpp::Node::SharedPtr node = rclcpp::Node::make_shared("neo_fleet_thread");
 
-  std::shared_ptr<RosHelper> Robot1 = std::make_shared<RosHelper>(node, "mpo_7000");
-  std::shared_ptr<RosHelper> Robot2 = std::make_shared<RosHelper>(node, "mpo_7001");
+  std::vector<std::shared_ptr<RosHelper>> m_robots;
+
+  std::map<std::string, std::shared_ptr<RosHelper>> m_named_robot; 
+
+  // std::shared_ptr<RosHelper> Robot1 = std::make_shared<RosHelper>(node, "mpo_7000");
+  // std::shared_ptr<RosHelper> Robot2 = std::make_shared<RosHelper>(node, "mpo_7001");
   std::vector<std::string> robot_namespaces;
 
 public slots:
@@ -131,9 +135,6 @@ signals:
   void finished();
   void data_recieved();
   void error(QString err);
-
-private:
-  // add your variables here
 };
 
 class NeoFleetRViz2Plugin : public rviz_common::Panel
