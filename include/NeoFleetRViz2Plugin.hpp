@@ -80,9 +80,9 @@ public:
   // Default Constructor
   RosHelper() {}
 
-  RosHelper(rclcpp::Node::SharedPtr node1, std::string robot_name_)
+  RosHelper(rclcpp::Node::SharedPtr node_, std::string robot_name_)
   {
-    node = node1;
+    node = node_;
     robot_name = robot_name_;
     m_pub_loc_pose = node->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(
       "/" + robot_name + "/initialpose", 10);
