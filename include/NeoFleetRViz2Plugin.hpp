@@ -152,7 +152,7 @@ public:
   QThread * thread = new QThread;
   Worker * worker = new Worker();
 
-  std::shared_ptr<RosHelper> robot_tmp;
+  std::shared_ptr<RosHelper> robot_selected;
 
 public slots:
   void update();
