@@ -157,6 +157,7 @@ NeoFleetRViz2Plugin::NeoFleetRViz2Plugin(QWidget * parent)
   connect(worker, SIGNAL(finished()), worker, SLOT(deleteLater()));
   connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
   thread->start();
+  
 }
 
 NeoFleetRViz2Plugin::~NeoFleetRViz2Plugin()
@@ -205,9 +206,6 @@ void NeoFleetRViz2Plugin::update()
   }
 
   if (!robot_selected->m_robotLocalization) {
-    
-    // Setting the initial values on the GUI
-    
     if (!worker->m_pose) {
       X_loc_value->setText(
         "X: " + QString::number(0) + ", Y: " + QString::number(
@@ -221,9 +219,6 @@ void NeoFleetRViz2Plugin::update()
         ", Y: " + QString::number(worker->m_pose->pose.pose.position.y) +
         ", Theta: " + QString::number(worker->m_pose->pose.pose.orientation.z));
       pub_pose = *worker->m_pose;
-
-      // Forwarding the robot pose to corresponding topic
-      
       robot_selected->m_pub_loc_pose->publish(pub_pose);
       m_localization_done = true;
       robot_selected->m_robotLocalization = true;
@@ -232,17 +227,12 @@ void NeoFleetRViz2Plugin::update()
   }
 
   if (robot_selected->m_robotLocalization) {
-
-    // Updating the GUI with real time pose
-
     geometry_msgs::msg::PoseStamped pub_goal_pose;
     selected_robot->setText("Selected Robot: " + QString::fromStdString(robot_selected->robot_name));
     X_loc_value->setText(
       "X: " + QString::number(robot_selected->m_pose.pose.position.x) +
       ", Y: " + QString::number(robot_selected->m_pose.pose.position.y) +
       ", Theta: " + QString::number(robot_selected->m_pose.pose.orientation.z));
-
-    // Handling user requested goals
 
     if (worker->m_goal && robot_selected->m_goalSent == false) {
       pub_goal_pose = *worker->m_goal;
