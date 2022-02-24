@@ -117,12 +117,18 @@ public:
 
   void pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose);
   void goal_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose);
+  void checkAndStoreRobot(std::string robot_name);
 
   rclcpp::Node::SharedPtr node = rclcpp::Node::make_shared("neo_fleet_thread");
 
-  std::shared_ptr<RosHelper> Robot1 = std::make_shared<RosHelper>(node, "mpo_7000");
-  std::shared_ptr<RosHelper> Robot2 = std::make_shared<RosHelper>(node, "mpo_7001");
+  std::vector<std::shared_ptr<RosHelper>> m_robots;
+
+  std::map<std::string, std::shared_ptr<RosHelper>> m_named_robot;
+
   std::vector<std::string> robot_namespaces;
+
+  // Hardcoding the robot list - This later needs to be automized
+  std::vector<std::string> available_robots = {"mpo_700", "mpo_500", "mp_400"};
 
 public slots:
   void process();
@@ -131,9 +137,6 @@ signals:
   void finished();
   void data_recieved();
   void error(QString err);
-
-private:
-  // add your variables here
 };
 
 class NeoFleetRViz2Plugin : public rviz_common::Panel
@@ -151,7 +154,7 @@ public:
   QThread * thread = new QThread;
   Worker * worker = new Worker();
 
-  std::shared_ptr<RosHelper> robot_tmp;
+  std::shared_ptr<RosHelper> robot_selected;
 
 public slots:
   void update();
