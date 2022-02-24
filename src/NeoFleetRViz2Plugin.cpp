@@ -288,7 +288,7 @@ void NeoFleetRViz2Plugin::update()
 void NeoFleetRViz2Plugin::handleButton1()
 {
   std::string command =
-    "ros2 launch neo_simulation2 rviz_launch.py use_namespace:=true namespace:=";
+    "ros2 launch neo_nav2_bringup rviz_launch.py use_namespace:=true namespace:=";
   command.append(robot_selected->robot_name);
   command.append("&");
 
