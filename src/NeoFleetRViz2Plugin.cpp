@@ -60,6 +60,18 @@ Worker::~Worker()
 {
 }
 
+void Worker::checkAndStoreRobot(std::string robot)
+{
+  // Storing the robot name in another tmp variable
+  std::string tmp = robot;
+  tmp.pop_back();
+  for (long unsigned int i = 0; i < available_robots.size(); i++) {
+    if (tmp == available_robots[i]) {
+      robot_namespaces.push_back(robot);
+    }
+  }
+}
+
 // --- PROCESS ---
 // Start processing data.
 void Worker::process()
@@ -78,7 +90,7 @@ void Worker::process()
       if (it->first[i] == '/' && dslash != 2) {
         dslash++;
         if (dslash == 2 && tmp != robots) {
-          robot_namespaces.push_back(robots);
+          checkAndStoreRobot(robots);
           tmp = robots;
         }
       }
@@ -87,11 +99,11 @@ void Worker::process()
   }
 
   // Allocating ros helpers depending on the number of robots available.
-  if(robot_namespaces.size() == 0) {
+  if (robot_namespaces.size() == 0) {
     RCLCPP_ERROR(
       node->get_logger(),
       "There are no robots available"
-      );
+    );
     return;
   }
 
@@ -99,7 +111,10 @@ void Worker::process()
 
   for (long unsigned int i = 0; i < m_robots.size(); i++) {
     m_robots[i] = std::make_shared<RosHelper>(node, robot_namespaces[i]);
-    m_named_robot.insert(std::pair<std::string, std::shared_ptr<RosHelper>> (robot_namespaces[i], m_robots[i]));
+    m_named_robot.insert(
+      std::pair<std::string, std::shared_ptr<RosHelper>>(
+        robot_namespaces[i],
+        m_robots[i]));
   }
 
   m_initial_pose = node->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
@@ -157,7 +172,7 @@ NeoFleetRViz2Plugin::NeoFleetRViz2Plugin(QWidget * parent)
   connect(worker, SIGNAL(finished()), worker, SLOT(deleteLater()));
   connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
   thread->start();
-  
+
 }
 
 NeoFleetRViz2Plugin::~NeoFleetRViz2Plugin()
@@ -187,7 +202,7 @@ void NeoFleetRViz2Plugin::setRobotName()
     RCLCPP_ERROR(
       worker->node->get_logger(),
       "Robot not found in the drop down"
-      );
+    );
   }
 }
 
@@ -201,7 +216,7 @@ void NeoFleetRViz2Plugin::update()
     process_combo = true;
   }
 
-  if(robot_selected == NULL) {
+  if (robot_selected == NULL) {
     return;
   }
 
@@ -210,10 +225,14 @@ void NeoFleetRViz2Plugin::update()
       X_loc_value->setText(
         "X: " + QString::number(0) + ", Y: " + QString::number(
           0) + ", Theta: " + QString::number(0));
-      selected_robot->setText("Selected Robot: " + QString::fromStdString(robot_selected->robot_name));
+      selected_robot->setText(
+        "Selected Robot: " + QString::fromStdString(
+          robot_selected->robot_name));
     } else {
       geometry_msgs::msg::PoseWithCovarianceStamped pub_pose;
-      selected_robot->setText("Selected Robot: " + QString::fromStdString(robot_selected->robot_name));
+      selected_robot->setText(
+        "Selected Robot: " +
+        QString::fromStdString(robot_selected->robot_name));
       X_loc_value->setText(
         "X: " + QString::number(worker->m_pose->pose.pose.position.x) +
         ", Y: " + QString::number(worker->m_pose->pose.pose.position.y) +
@@ -228,7 +247,9 @@ void NeoFleetRViz2Plugin::update()
 
   if (robot_selected->m_robotLocalization) {
     geometry_msgs::msg::PoseStamped pub_goal_pose;
-    selected_robot->setText("Selected Robot: " + QString::fromStdString(robot_selected->robot_name));
+    selected_robot->setText(
+      "Selected Robot: " +
+      QString::fromStdString(robot_selected->robot_name));
     X_loc_value->setText(
       "X: " + QString::number(robot_selected->m_pose.pose.position.x) +
       ", Y: " + QString::number(robot_selected->m_pose.pose.position.y) +
