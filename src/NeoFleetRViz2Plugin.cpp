@@ -62,11 +62,8 @@ Worker::~Worker()
 
 void Worker::checkAndStoreRobot(std::string & robot)
 {
-  // Storing the robot name in another tmp variable
-  std::string tmp = robot;
-  tmp.pop_back();
-  for (int i = 0; i < available_robots_.size(); i++) {
-    if (tmp == available_robots_[i]) {
+  for (int i = 0; i < available_robots_.size(); ++i) {
+    if (robot == available_robots_[i]) {
       robot_namespaces_.push_back(robot);
     }
   }
@@ -136,11 +133,12 @@ NeoFleetRViz2Plugin::NeoFleetRViz2Plugin(QWidget * parent)
   main_layout_ = new QVBoxLayout;
   side_layout_ = new QVBoxLayout;
   topic_layout_ = new QHBoxLayout;
-
   output_status_editor_ = new QLineEdit;
   QTimer * output_timer = new QTimer(this);
   start_rviz_ = new QPushButton("RViz", this);
   robot_container_ = new QComboBox(this);
+  robot_location_ = new QLabel(this);
+  selected_robot_ = new QLabel(this);
 
   topic_layout_->addWidget(new QLabel("Select the target robot:"));
   topic_layout_->addWidget(robot_container_);
@@ -221,11 +219,9 @@ void NeoFleetRViz2Plugin::update()
   if (!robot_->is_localized_) {
     if (!worker->initial_pose_) {
       robot_location_->setText(
-        "X: " + QString::number(0) + ", Y: " + QString::number(
-          0) + ", Theta: " + QString::number(0));
+        QString::fromStdString("X: 0, Y: 0, Theta: 0 "));
       selected_robot_->setText(
-        "Selected Robot: " + QString::fromStdString(
-          robot_->robot_name_));
+        QString::fromStdString("Selected Robot: " + robot_->robot_name_));
     } else {
       geometry_msgs::msg::PoseWithCovarianceStamped pub_pose;
       selected_robot_->setText(

@@ -120,7 +120,7 @@ public:
   std::vector<std::string> robot_namespaces_;
 
   // Hardcoding the robot list - This later needs to be automized
-  std::vector<std::string> available_robots_ = {"mpo_700", "mpo_500", "mp_400"};
+  std::vector<std::string> available_robots_ = {"robot0", "robot1", "robot2"};
 
 public slots:
   void process();
@@ -157,7 +157,6 @@ protected:
   QLabel * robot_location_{nullptr};
   QLabel * selected_robot_{nullptr};
   QComboBox * robot_container_{nullptr};
-  QString * output_status_{nullptr};
   QHBoxLayout * topic_layout_{nullptr};
   QVBoxLayout * main_layout_{nullptr};
   QVBoxLayout * side_layout_{nullptr};
