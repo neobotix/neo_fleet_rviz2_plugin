@@ -133,7 +133,10 @@ void Worker::process()
 NeoFleetRViz2Plugin::NeoFleetRViz2Plugin(QWidget * parent)
 : rviz_common::Panel(parent)
 {
+  main_layout_ = new QVBoxLayout;
+  side_layout_ = new QVBoxLayout;
   topic_layout_ = new QHBoxLayout;
+
   output_status_editor_ = new QLineEdit;
   QTimer * output_timer = new QTimer(this);
   start_rviz_ = new QPushButton("RViz", this);
@@ -152,9 +155,10 @@ NeoFleetRViz2Plugin::NeoFleetRViz2Plugin(QWidget * parent)
   // Start the timer.
   output_timer->start(100);
 
-  main_layout_->addLayout(topic_layout_);
   side_layout_->addWidget(robot_location_);
   side_layout_->addWidget(selected_robot_);
+
+  main_layout_->addLayout(topic_layout_);
   main_layout_->addLayout(side_layout_);
 
   setLayout(main_layout_);

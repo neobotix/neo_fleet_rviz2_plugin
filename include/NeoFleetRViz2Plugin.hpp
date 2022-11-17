@@ -80,11 +80,11 @@ public:
   {
     node_ = node;
     robot_name_ = robot_name;
-    local_pos_pub_ = node->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(
+    local_pos_pub_ = node_->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(
       "/" + robot_name_ + "/initialpose", 10);
-    goal_pos_pub_ = node->create_publisher<geometry_msgs::msg::PoseStamped>(
+    goal_pos_pub_ = node_->create_publisher<geometry_msgs::msg::PoseStamped>(
       "/" + robot_name_ + "/goal_pose", 10);
-    odom_subscriber_ = node->create_subscription<nav_msgs::msg::Odometry>(
+    odom_subscriber_ = node_->create_subscription<nav_msgs::msg::Odometry>(
       "/" + robot_name_ +
       "/odom", 1, std::bind(&RosHelper::odom_pose_cb, this, std::placeholders::_1));
     navigation_action_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(
