@@ -42,6 +42,7 @@
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "rviz_default_plugins/tools/goal_pose/goal_tool.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "geometry_msgs/msg/transform_stamped.hpp"
 #include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "nav_msgs/msg/odometry.hpp"
@@ -49,6 +50,9 @@
 #include "map"
 #include "memory"
 #include "string"
+#include "tf2_ros/transform_listener.h"
+#include "tf2_ros/create_timer_ros.h"
+#include "tf2_ros/buffer.h"
 
 
 class QLineEdit;
@@ -61,16 +65,12 @@ private:
   rclcpp::Node::SharedPtr node_;
 
 public:
-  geometry_msgs::msg::PoseWithCovariance odom_pose_;
-
   rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr local_pos_pub_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pos_pub_;
-  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_subscriber_;
-
   rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SharedPtr navigation_action_client_;
   nav2_msgs::action::NavigateToPose::Goal navigation_goal_;
 
-  bool is_localized_ = false;
+  bool is_localized_ = true;
   bool is_goal_sent_ = false;
   std::string robot_name_;
 
@@ -84,16 +84,8 @@ public:
       "/" + robot_name_ + "/initialpose", 10);
     goal_pos_pub_ = node_->create_publisher<geometry_msgs::msg::PoseStamped>(
       "/" + robot_name_ + "/goal_pose", 10);
-    odom_subscriber_ = node_->create_subscription<nav_msgs::msg::Odometry>(
-      "/" + robot_name_ +
-      "/odom", 1, std::bind(&RosHelper::odom_pose_cb, this, std::placeholders::_1));
     navigation_action_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(
       node_, "/" + robot_name_ + "/navigate_to_pose");
-  }
-
-  void odom_pose_cb(const nav_msgs::msg::Odometry::SharedPtr pose)
-  {
-    odom_pose_ = pose->pose;
   }
 };
 
@@ -105,7 +97,6 @@ class Worker : public QObject
 public:
   Worker();
   ~Worker();
-  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pos_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pos_sub_;
   geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr initial_pose_;
   geometry_msgs::msg::PoseStamped::SharedPtr goal_pose_;
@@ -144,6 +135,7 @@ public:
   QThread * thread = new QThread;
   Worker * worker = new Worker();
   std::shared_ptr<RosHelper> robot_;
+  rclcpp::Node::SharedPtr client_node_;
 
 public slots:
   void update();
@@ -166,6 +158,8 @@ protected:
   bool process_combo_ = false;
   std::string robot_name_;
   std::thread thread_func;
+  std::shared_ptr<tf2_ros::Buffer> tf2_buffer_;
+  std::shared_ptr<tf2_ros::TransformListener> transform_listener_;
 };
 
 }  // namespace neo_fleet

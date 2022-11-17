@@ -114,8 +114,6 @@ void Worker::process()
         robots_[i]));
   }
 
-  initial_pos_sub_ = node_->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
-    "/initialpose", 1, std::bind(&Worker::pose_callback, this, std::placeholders::_1));
   goal_pos_sub_ = node_->create_subscription<geometry_msgs::msg::PoseStamped>(
     "/goal_pose", 1, std::bind(&Worker::goal_callback, this, std::placeholders::_1));
 
@@ -130,11 +128,19 @@ void Worker::process()
 NeoFleetRViz2Plugin::NeoFleetRViz2Plugin(QWidget * parent)
 : rviz_common::Panel(parent)
 {
+  client_node_ = std::make_shared<rclcpp::Node>("__");
+  tf2_buffer_ = std::make_shared<tf2_ros::Buffer>(client_node_->get_clock());
+  auto timer_interface = std::make_shared<tf2_ros::CreateTimerROS>(
+    client_node_->get_node_base_interface(),
+    client_node_->get_node_timers_interface());
+  tf2_buffer_->setCreateTimerInterface(timer_interface);
+  transform_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf2_buffer_);
+
   main_layout_ = new QVBoxLayout;
   side_layout_ = new QVBoxLayout;
   topic_layout_ = new QHBoxLayout;
   output_status_editor_ = new QLineEdit;
-  QTimer * output_timer = new QTimer(this);
+
   start_rviz_ = new QPushButton("RViz", this);
   robot_container_ = new QComboBox(this);
   robot_location_ = new QLabel(this);
@@ -149,9 +155,6 @@ NeoFleetRViz2Plugin::NeoFleetRViz2Plugin(QWidget * parent)
     robot_container_, QOverload<int>::of(&QComboBox::activated), this,
     &NeoFleetRViz2Plugin::setRobotName);
   connect(start_rviz_, &QPushButton::released, this, &NeoFleetRViz2Plugin::launchRViz);
-
-  // Start the timer.
-  output_timer->start(100);
 
   side_layout_->addWidget(robot_location_);
   side_layout_->addWidget(selected_robot_);
@@ -173,11 +176,6 @@ NeoFleetRViz2Plugin::NeoFleetRViz2Plugin(QWidget * parent)
 
 NeoFleetRViz2Plugin::~NeoFleetRViz2Plugin()
 {
-}
-
-void Worker::pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose)
-{
-  initial_pose_ = pose;
 }
 
 void Worker::goal_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose)
@@ -215,38 +213,34 @@ void NeoFleetRViz2Plugin::update()
   if (robot_ == NULL) {
     return;
   }
+  geometry_msgs::msg::TransformStamped robot_pose;
 
-  if (!robot_->is_localized_) {
-    if (!worker->initial_pose_) {
-      robot_location_->setText(
-        QString::fromStdString("X: 0, Y: 0, Theta: 0 "));
-      selected_robot_->setText(
-        QString::fromStdString("Selected Robot: " + robot_->robot_name_));
-    } else {
-      geometry_msgs::msg::PoseWithCovarianceStamped pub_pose;
-      selected_robot_->setText(
-        "Selected Robot: " +
-        QString::fromStdString(robot_->robot_name_));
-      robot_location_->setText(
-        "X: " + QString::number(worker->initial_pose_->pose.pose.position.x) +
-        ", Y: " + QString::number(worker->initial_pose_->pose.pose.position.y) +
-        ", Theta: " + QString::number(worker->initial_pose_->pose.pose.orientation.z));
-      pub_pose = *worker->initial_pose_;
-      robot_->local_pos_pub_->publish(pub_pose);
-      robot_->is_localized_ = true;
-      worker->initial_pose_ = NULL;
-    }
+  try {
+    robot_->is_localized_ = true;
+    robot_pose = tf2_buffer_->lookupTransform(
+      "map", robot_->robot_name_ + "/base_footprint",
+      tf2::TimePointZero);
+  } catch (const tf2::TransformException & ex) {
+    RCLCPP_INFO(
+      client_node_->get_logger(), "Could not transform %s to %s: %s",
+      "map", "base_footprint", ex.what());
+    robot_->is_localized_ = false;
   }
 
-  if (robot_->is_localized_) {
+  if (!robot_->is_localized_) {
+    robot_location_->setText(
+      QString::fromStdString("X: 0, Y: 0, Theta: 0 "));
+    selected_robot_->setText(
+      QString::fromStdString("Selected Robot: " + robot_->robot_name_));
+  } else {
     geometry_msgs::msg::PoseStamped pub_goal_pose;
     selected_robot_->setText(
       "Selected Robot: " +
       QString::fromStdString(robot_->robot_name_));
     robot_location_->setText(
-      "X: " + QString::number(robot_->odom_pose_.pose.position.x) +
-      ", Y: " + QString::number(robot_->odom_pose_.pose.position.y) +
-      ", Theta: " + QString::number(robot_->odom_pose_.pose.orientation.z));
+      "X: " + QString::number(robot_pose.transform.translation.x) +
+      ", Y: " + QString::number(robot_pose.transform.translation.y) +
+      ", Theta: " + QString::number(robot_pose.transform.rotation.z));
 
     if (worker->goal_pose_ && robot_->is_goal_sent_ == false) {
       pub_goal_pose = *worker->goal_pose_;
