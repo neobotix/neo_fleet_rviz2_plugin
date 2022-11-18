@@ -126,7 +126,7 @@ void Worker::process()
 }
 
 NeoFleetRViz2Plugin::NeoFleetRViz2Plugin(QWidget * parent)
-: rviz_common::Panel(parent)
+: rviz_common::Panel(parent), server_timeout_(100)
 {
   client_node_ = std::make_shared<rclcpp::Node>("__");
   tf2_buffer_ = std::make_shared<tf2_ros::Buffer>(client_node_->get_clock());
@@ -267,6 +267,13 @@ void NeoFleetRViz2Plugin::update()
         robot_->navigation_action_client_->async_send_goal(
         robot_->navigation_goal_,
         send_goal_options);
+
+      if (rclcpp::spin_until_future_complete(client_node_, future_goal_handle, server_timeout_) !=
+        rclcpp::FutureReturnCode::SUCCESS)
+      {
+        RCLCPP_ERROR(client_node_->get_logger(), "Send goal call failed");
+        return;
+      }
       robot_->is_goal_sent_ = true;
       worker->goal_pose_ = NULL;
     }

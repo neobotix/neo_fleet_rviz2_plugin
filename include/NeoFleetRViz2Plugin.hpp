@@ -139,7 +139,7 @@ protected Q_SLOTS:
   void setRobotName();
   void launchRViz();
 
-protected:
+private:
   QLineEdit * output_status_editor_{nullptr};
   QLabel * robot_location_{nullptr};
   QLabel * selected_robot_{nullptr};
@@ -155,6 +155,7 @@ protected:
   std::thread thread_func;
   std::shared_ptr<tf2_ros::Buffer> tf2_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> transform_listener_;
+  std::chrono::milliseconds server_timeout_;
 };
 
 }  // namespace neo_fleet
