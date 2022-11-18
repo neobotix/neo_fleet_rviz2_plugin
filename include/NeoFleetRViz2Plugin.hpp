@@ -80,10 +80,6 @@ public:
   {
     node_ = node;
     robot_name_ = robot_name;
-    local_pos_pub_ = node_->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(
-      "/" + robot_name_ + "/initialpose", 10);
-    goal_pos_pub_ = node_->create_publisher<geometry_msgs::msg::PoseStamped>(
-      "/" + robot_name_ + "/goal_pose", 10);
     navigation_action_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(
       node_, "/" + robot_name_ + "/navigate_to_pose");
   }
@@ -98,7 +94,6 @@ public:
   Worker();
   ~Worker();
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pos_sub_;
-  geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr initial_pose_;
   geometry_msgs::msg::PoseStamped::SharedPtr goal_pose_;
 
   void pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose);

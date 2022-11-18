@@ -145,6 +145,7 @@ NeoFleetRViz2Plugin::NeoFleetRViz2Plugin(QWidget * parent)
   robot_container_ = new QComboBox(this);
   robot_location_ = new QLabel(this);
   selected_robot_ = new QLabel(this);
+  robot_list_.push_back(QString(""));
 
   topic_layout_->addWidget(new QLabel("Select the target robot:"));
   topic_layout_->addWidget(robot_container_);
