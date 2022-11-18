@@ -114,6 +114,8 @@ void Worker::process()
         robots_[i]));
   }
 
+  initial_pose_sub_ = node_->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+    "/initialpose", 1, std::bind(&Worker::pose_callback, this, std::placeholders::_1));
   goal_pos_sub_ = node_->create_subscription<geometry_msgs::msg::PoseStamped>(
     "/goal_pose", 1, std::bind(&Worker::goal_callback, this, std::placeholders::_1));
 
@@ -184,6 +186,11 @@ void Worker::goal_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose
   goal_pose_ = pose;
 }
 
+void Worker::pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose)
+{
+  initial_pose_ = pose;
+}
+
 void NeoFleetRViz2Plugin::setRobotName()
 {
   robot_name_ = robot_container_->currentText().toStdString();
@@ -217,13 +224,15 @@ void NeoFleetRViz2Plugin::update()
   geometry_msgs::msg::TransformStamped robot_pose;
 
   try {
+    // setting it to true, even if the robot is already localized
     robot_->is_localized_ = true;
     robot_pose = tf2_buffer_->lookupTransform(
       "map", robot_->robot_name_ + "/base_footprint",
       tf2::TimePointZero);
   } catch (const tf2::TransformException & ex) {
     RCLCPP_INFO(
-      client_node_->get_logger(), "Could not transform %s to %s: %s",
+      client_node_->get_logger(),
+      "Could not transform %s to %s: %s, check if initialpose published",
       "map", "base_footprint", ex.what());
     robot_->is_localized_ = false;
   }
@@ -277,6 +286,15 @@ void NeoFleetRViz2Plugin::update()
       robot_->is_goal_sent_ = true;
       worker->goal_pose_ = NULL;
     }
+  }
+
+  // Check for inital pose updates every cycle
+  if (worker->initial_pose_) {
+    // set it to true, if not set before
+    std::cout << "Publishing initial pose to: " << robot_->robot_name_ << std::endl;
+    robot_->is_localized_ = true;
+    robot_->local_pos_pub_->publish(*worker->initial_pose_);
+    worker->initial_pose_ = NULL;
   }
 }
 

@@ -69,6 +69,7 @@ public:
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pos_pub_;
   rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SharedPtr navigation_action_client_;
   nav2_msgs::action::NavigateToPose::Goal navigation_goal_;
+  geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr initial_pose_;
 
   bool is_localized_ = true;
   bool is_goal_sent_ = false;
@@ -80,6 +81,8 @@ public:
   {
     node_ = node;
     robot_name_ = robot_name;
+    local_pos_pub_ = node_->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(
+      "/" + robot_name_ + "/initialpose", 10);
     navigation_action_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(
       node_, "/" + robot_name_ + "/navigate_to_pose");
   }
@@ -93,7 +96,9 @@ class Worker : public QObject
 public:
   Worker();
   ~Worker();
+  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pos_sub_;
+  geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr initial_pose_;
   geometry_msgs::msg::PoseStamped::SharedPtr goal_pose_;
 
   void pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose);
