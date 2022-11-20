@@ -159,6 +159,9 @@ NeoFleetRViz2Plugin::NeoFleetRViz2Plugin(QWidget * parent)
   topic_layout_->addWidget(robot_container_);
   topic_layout_->addWidget(start_rviz_);
 
+  // Initialize the ptr as Null
+  robot_ = NULL;
+
   // Lay out the topic field above the control widget.
   connect(
     robot_container_, QOverload<int>::of(&QComboBox::activated), this,
