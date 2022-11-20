@@ -103,14 +103,14 @@ public:
 
   void pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose);
   void goal_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose);
-  void checkAndStoreRobot(std::string & robot_name);
+  void checkAndStoreRobot(const std::string & robot_name);
 
   rclcpp::Node::SharedPtr node_ = rclcpp::Node::make_shared("neo_fleet_thread");
   std::vector<std::shared_ptr<RosHelper>> robots_;
   std::map<std::string, std::shared_ptr<RosHelper>> robot_identity_map_;
   std::vector<std::string> robot_namespaces_;
 
-  // Hardcoding the robot list - This later needs to be automized
+  // ToDo: Hardcoding the robot list - This later needs to be automized
   std::vector<std::string> available_robots_ = {"robot0", "robot1", "robot2"};
 
 public slots:
@@ -148,6 +148,7 @@ private:
   QLineEdit * output_status_editor_{nullptr};
   QLabel * robot_location_{nullptr};
   QLabel * selected_robot_{nullptr};
+  QLabel * warn_signal_{nullptr};
   QComboBox * robot_container_{nullptr};
   QHBoxLayout * topic_layout_{nullptr};
   QVBoxLayout * main_layout_{nullptr};

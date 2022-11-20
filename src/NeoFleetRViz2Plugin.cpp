@@ -53,6 +53,10 @@ namespace neo_fleet
 // --- CONSTRUCTOR ---
 Worker::Worker()
 {
+  /** Reserving the vector size of the robots to the expected
+   * number of robots provided by the user **/
+  robots_.reserve(available_robots_.size());
+  robot_namespaces_.reserve(available_robots_.size());
 }
 
 // --- DECONSTRUCTOR ---
@@ -60,7 +64,7 @@ Worker::~Worker()
 {
 }
 
-void Worker::checkAndStoreRobot(std::string & robot)
+void Worker::checkAndStoreRobot(const std::string & robot)
 {
   for (int i = 0; i < available_robots_.size(); ++i) {
     if (robot == available_robots_[i]) {
@@ -104,7 +108,9 @@ void Worker::process()
     return;
   }
 
-  robots_.resize(robot_namespaces_.size());
+  if (robots_.size() < robot_namespaces_.size()) {
+    robots_.resize(robot_namespaces_.size());
+  }
 
   for (int i = 0; i < robots_.size(); i++) {
     robots_[i] = std::make_shared<RosHelper>(node_, robot_namespaces_[i]);
@@ -142,12 +148,12 @@ NeoFleetRViz2Plugin::NeoFleetRViz2Plugin(QWidget * parent)
   side_layout_ = new QVBoxLayout;
   topic_layout_ = new QHBoxLayout;
   output_status_editor_ = new QLineEdit;
+  warn_signal_ = new QLabel("No robot selected");
 
   start_rviz_ = new QPushButton("RViz", this);
   robot_container_ = new QComboBox(this);
   robot_location_ = new QLabel(this);
   selected_robot_ = new QLabel(this);
-  robot_list_.push_back(QString(""));
 
   topic_layout_->addWidget(new QLabel("Select the target robot:"));
   topic_layout_->addWidget(robot_container_);
@@ -159,6 +165,7 @@ NeoFleetRViz2Plugin::NeoFleetRViz2Plugin(QWidget * parent)
     &NeoFleetRViz2Plugin::setRobotName);
   connect(start_rviz_, &QPushButton::released, this, &NeoFleetRViz2Plugin::launchRViz);
 
+  side_layout_->addWidget(warn_signal_);
   side_layout_->addWidget(robot_location_);
   side_layout_->addWidget(selected_robot_);
 
@@ -200,11 +207,14 @@ void NeoFleetRViz2Plugin::setRobotName()
 
   if (search != worker->robot_identity_map_.end()) {
     robot_ = search->second;
+    warn_signal_->clear();
   } else {
     RCLCPP_ERROR(
       worker->node_->get_logger(),
       "Robot not found in the drop down"
     );
+    robot_ = NULL;
+    warn_signal_->setText("Robot is not found in the list");
   }
 }
 
@@ -221,6 +231,7 @@ void NeoFleetRViz2Plugin::update()
   if (robot_ == NULL) {
     return;
   }
+
   geometry_msgs::msg::TransformStamped robot_pose;
 
   try {
