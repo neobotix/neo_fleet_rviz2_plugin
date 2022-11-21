@@ -96,7 +96,7 @@ void Worker::process()
         }
       }
     }
-    robots = "";
+    robots.clear();
   }
 
   // Allocating ros helpers depending on the number of robots available.
