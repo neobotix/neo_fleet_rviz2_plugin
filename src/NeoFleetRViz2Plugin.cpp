@@ -53,6 +53,10 @@ namespace neo_fleet
 // --- CONSTRUCTOR ---
 Worker::Worker()
 {
+  /** Reserving the vector size of the robots to the expected
+   * number of robots provided by the user **/
+  robots_.reserve(available_robots_.size());
+  robot_namespaces_.reserve(available_robots_.size());
 }
 
 // --- DECONSTRUCTOR ---
@@ -60,14 +64,11 @@ Worker::~Worker()
 {
 }
 
-void Worker::checkAndStoreRobot(std::string robot)
+void Worker::checkAndStoreRobot(const std::string & robot)
 {
-  // Storing the robot name in another tmp variable
-  std::string tmp = robot;
-  tmp.pop_back();
-  for (long unsigned int i = 0; i < available_robots.size(); i++) {
-    if (tmp == available_robots[i]) {
-      robot_namespaces.push_back(robot);
+  for (int i = 0; i < available_robots_.size(); ++i) {
+    if (robot == available_robots_[i]) {
+      robot_namespaces_.push_back(robot);
     }
   }
 }
@@ -76,14 +77,14 @@ void Worker::checkAndStoreRobot(std::string robot)
 // Start processing data.
 void Worker::process()
 {
-  std::map<std::string, std::vector<std::string>> get_topic = node->get_topic_names_and_types();
+  std::map<std::string, std::vector<std::string>> get_topic = node_->get_topic_names_and_types();
   std::string robots = "";
   std::string tmp = "";
 
   // Store the robots for the drop down list
   for (auto it = get_topic.begin(); it != get_topic.end(); it++) {
     int dslash = 0;
-    for (long unsigned int i = 0; i < (it->first).size(); i++) {
+    for (int i = 0; i < (it->first).size(); i++) {
       if (it->first[i] != '/') {
         robots += it->first[i];
       }
@@ -95,74 +96,86 @@ void Worker::process()
         }
       }
     }
-    robots = "";
+    robots.clear();
   }
 
   // Allocating ros helpers depending on the number of robots available.
-  if (robot_namespaces.size() == 0) {
+  if (robot_namespaces_.size() == 0) {
     RCLCPP_ERROR(
-      node->get_logger(),
+      node_->get_logger(),
       "There are no robots available"
     );
     return;
   }
 
-  m_robots.resize(robot_namespaces.size());
-
-  for (long unsigned int i = 0; i < m_robots.size(); i++) {
-    m_robots[i] = std::make_shared<RosHelper>(node, robot_namespaces[i]);
-    m_named_robot.insert(
-      std::pair<std::string, std::shared_ptr<RosHelper>>(
-        robot_namespaces[i],
-        m_robots[i]));
+  if (robots_.size() < robot_namespaces_.size()) {
+    robots_.resize(robot_namespaces_.size());
   }
 
-  m_initial_pose = node->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+  for (int i = 0; i < robots_.size(); i++) {
+    robots_[i] = std::make_shared<RosHelper>(node_, robot_namespaces_[i]);
+    robot_identity_map_.insert(
+      std::pair<std::string, std::shared_ptr<RosHelper>>(
+        robot_namespaces_[i],
+        robots_[i]));
+  }
+
+  initial_pose_sub_ = node_->create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
     "/initialpose", 1, std::bind(&Worker::pose_callback, this, std::placeholders::_1));
-  m_goal_pose = node->create_subscription<geometry_msgs::msg::PoseStamped>(
+  goal_pos_sub_ = node_->create_subscription<geometry_msgs::msg::PoseStamped>(
     "/goal_pose", 1, std::bind(&Worker::goal_callback, this, std::placeholders::_1));
 
   rclcpp::Rate loop_rate(10);
   while (rclcpp::ok()) {
     loop_rate.sleep();
-    rclcpp::spin_some(node);
+    rclcpp::spin_some(node_);
     emit finished();
   }
 }
 
 NeoFleetRViz2Plugin::NeoFleetRViz2Plugin(QWidget * parent)
-: rviz_common::Panel(parent)
+: rviz_common::Panel(parent), server_timeout_(100)
 {
-  QHBoxLayout * topic_layout = new QHBoxLayout;
+  client_node_ = std::make_shared<rclcpp::Node>("__");
+  tf2_buffer_ = std::make_shared<tf2_ros::Buffer>(client_node_->get_clock());
+  auto timer_interface = std::make_shared<tf2_ros::CreateTimerROS>(
+    client_node_->get_node_base_interface(),
+    client_node_->get_node_timers_interface());
+  tf2_buffer_->setCreateTimerInterface(timer_interface);
+  transform_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf2_buffer_);
+
+  main_layout_ = new QVBoxLayout;
+  side_layout_ = new QVBoxLayout;
+  topic_layout_ = new QHBoxLayout;
   output_status_editor_ = new QLineEdit;
-  QTimer * output_timer = new QTimer(this);
+  warn_signal_ = new QLabel("No robot selected");
 
-  QPushButton * m_button1 = new QPushButton("RViz", this);
+  start_rviz_ = new QPushButton("RViz", this);
+  robot_container_ = new QComboBox(this);
+  robot_location_ = new QLabel(this);
+  selected_robot_ = new QLabel(this);
 
-  combo = new QComboBox(this);
-  // robot_selected = worker->m_robots[0];
+  topic_layout_->addWidget(new QLabel("Select the target robot:"));
+  topic_layout_->addWidget(robot_container_);
+  topic_layout_->addWidget(start_rviz_);
 
-  topic_layout->addWidget(new QLabel("Select the target robot:"));
-  topic_layout->addWidget(combo);
-  topic_layout->addWidget(m_button1);
+  // Initialize the ptr as Null
+  robot_ = NULL;
 
   // Lay out the topic field above the control widget.
   connect(
-    combo, QOverload<int>::of(&QComboBox::activated), this,
+    robot_container_, QOverload<int>::of(&QComboBox::activated), this,
     &NeoFleetRViz2Plugin::setRobotName);
-  connect(m_button1, &QPushButton::released, this, &NeoFleetRViz2Plugin::handleButton1);
+  connect(start_rviz_, &QPushButton::released, this, &NeoFleetRViz2Plugin::launchRViz);
 
-  // Start the timer.
-  output_timer->start(100);
+  side_layout_->addWidget(warn_signal_);
+  side_layout_->addWidget(robot_location_);
+  side_layout_->addWidget(selected_robot_);
 
-  QVBoxLayout * layout = new QVBoxLayout;
+  main_layout_->addLayout(topic_layout_);
+  main_layout_->addLayout(side_layout_);
 
-  layout->addLayout(topic_layout);
-  layout1->addWidget(X_loc_value);
-  layout1->addWidget(selected_robot);
-  layout->addLayout(layout1);
-
-  setLayout(layout);
+  setLayout(main_layout_);
 
   worker->moveToThread(thread);
   // connect(worker, SIGNAL(error(QString)), this, SLOT(errorString(QString)));
@@ -172,124 +185,138 @@ NeoFleetRViz2Plugin::NeoFleetRViz2Plugin(QWidget * parent)
   connect(worker, SIGNAL(finished()), worker, SLOT(deleteLater()));
   connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
   thread->start();
-
 }
 
 NeoFleetRViz2Plugin::~NeoFleetRViz2Plugin()
 {
 }
 
-void Worker::pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose)
-{
-  m_pose = pose;
-}
-
 void Worker::goal_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose)
 {
-  m_goal = pose;
+  goal_pose_ = pose;
+}
+
+void Worker::pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose)
+{
+  initial_pose_ = pose;
 }
 
 void NeoFleetRViz2Plugin::setRobotName()
 {
-  robot_name = combo->currentText().toStdString();
+  robot_name_ = robot_container_->currentText().toStdString();
 
   // Searching and assigning the corresponding pointers for selected robot
-  auto search = worker->m_named_robot.find(robot_name);
+  auto search = worker->robot_identity_map_.find(robot_name_);
 
-  if (search != worker->m_named_robot.end()) {
-    robot_selected = search->second;
+  if (search != worker->robot_identity_map_.end()) {
+    robot_ = search->second;
+    warn_signal_->clear();
   } else {
     RCLCPP_ERROR(
-      worker->node->get_logger(),
+      worker->node_->get_logger(),
       "Robot not found in the drop down"
     );
+    robot_ = NULL;
+    warn_signal_->setText("Robot is not found in the list");
   }
 }
 
 void NeoFleetRViz2Plugin::update()
 {
-  if (!process_combo) {
-    for (long unsigned int i = 0; i < worker->robot_namespaces.size(); i++) {
-      robot_list.push_back(QString::fromStdString(worker->robot_namespaces[i]));
+  if (!process_combo_) {
+    for (int i = 0; i < worker->robot_namespaces_.size(); i++) {
+      robot_list_.push_back(QString::fromStdString(worker->robot_namespaces_[i]));
     }
-    combo->addItems(robot_list);
-    process_combo = true;
+    robot_container_->addItems(robot_list_);
+    process_combo_ = true;
   }
 
-  if (robot_selected == NULL) {
+  if (robot_ == NULL) {
     return;
   }
 
-  if (!robot_selected->m_robotLocalization) {
-    if (!worker->m_pose) {
-      X_loc_value->setText(
-        "X: " + QString::number(0) + ", Y: " + QString::number(
-          0) + ", Theta: " + QString::number(0));
-      selected_robot->setText(
-        "Selected Robot: " + QString::fromStdString(
-          robot_selected->robot_name));
-    } else {
-      geometry_msgs::msg::PoseWithCovarianceStamped pub_pose;
-      selected_robot->setText(
-        "Selected Robot: " +
-        QString::fromStdString(robot_selected->robot_name));
-      X_loc_value->setText(
-        "X: " + QString::number(worker->m_pose->pose.pose.position.x) +
-        ", Y: " + QString::number(worker->m_pose->pose.pose.position.y) +
-        ", Theta: " + QString::number(worker->m_pose->pose.pose.orientation.z));
-      pub_pose = *worker->m_pose;
-      robot_selected->m_pub_loc_pose->publish(pub_pose);
-      m_localization_done = true;
-      robot_selected->m_robotLocalization = true;
-      worker->m_pose = NULL;
-    }
+  geometry_msgs::msg::TransformStamped robot_pose;
+
+  try {
+    // setting it to true, even if the robot is already localized
+    robot_->is_localized_ = true;
+    robot_pose = tf2_buffer_->lookupTransform(
+      "map", robot_->robot_name_ + "/base_footprint",
+      tf2::TimePointZero);
+  } catch (const tf2::TransformException & ex) {
+    RCLCPP_INFO(
+      client_node_->get_logger(),
+      "Could not transform %s to %s: %s, check if initialpose published",
+      "map", "base_footprint", ex.what());
+    robot_->is_localized_ = false;
   }
 
-  if (robot_selected->m_robotLocalization) {
+  if (!robot_->is_localized_) {
+    robot_location_->setText(
+      QString::fromStdString("X: 0, Y: 0, Theta: 0 "));
+    selected_robot_->setText(
+      QString::fromStdString("Selected Robot: " + robot_->robot_name_));
+  } else {
     geometry_msgs::msg::PoseStamped pub_goal_pose;
-    selected_robot->setText(
+    selected_robot_->setText(
       "Selected Robot: " +
-      QString::fromStdString(robot_selected->robot_name));
-    X_loc_value->setText(
-      "X: " + QString::number(robot_selected->m_pose.pose.position.x) +
-      ", Y: " + QString::number(robot_selected->m_pose.pose.position.y) +
-      ", Theta: " + QString::number(robot_selected->m_pose.pose.orientation.z));
+      QString::fromStdString(robot_->robot_name_));
+    robot_location_->setText(
+      "X: " + QString::number(robot_pose.transform.translation.x) +
+      ", Y: " + QString::number(robot_pose.transform.translation.y) +
+      ", Theta: " + QString::number(robot_pose.transform.rotation.z));
 
-    if (worker->m_goal && robot_selected->m_goalSent == false) {
-      pub_goal_pose = *worker->m_goal;
+    if (worker->goal_pose_ && robot_->is_goal_sent_ == false) {
+      pub_goal_pose = *worker->goal_pose_;
       auto check_action_server_ready =
-        robot_selected->navigation_action_client_->wait_for_action_server(std::chrono::seconds(5));
+        robot_->navigation_action_client_->wait_for_action_server(std::chrono::seconds(5));
       if (!check_action_server_ready) {
         RCLCPP_ERROR(
-          worker->node->get_logger(),
+          worker->node_->get_logger(),
           "navigate_to_pose action server is not available."
         );
         return;
       }
 
-      robot_selected->navigation_goal_.pose = pub_goal_pose;
+      robot_->navigation_goal_.pose = pub_goal_pose;
 
       auto send_goal_options =
         rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SendGoalOptions();
       send_goal_options.result_callback = [this](auto) {
-          robot_selected->m_goalSent = false;
+          robot_->is_goal_sent_ = false;
         };
 
       auto future_goal_handle =
-        robot_selected->navigation_action_client_->async_send_goal(
-        robot_selected->navigation_goal_,
+        robot_->navigation_action_client_->async_send_goal(
+        robot_->navigation_goal_,
         send_goal_options);
-      robot_selected->m_goalSent = true;
-      worker->m_goal = NULL;
+
+      if (rclcpp::spin_until_future_complete(client_node_, future_goal_handle, server_timeout_) !=
+        rclcpp::FutureReturnCode::SUCCESS)
+      {
+        RCLCPP_ERROR(client_node_->get_logger(), "Send goal call failed");
+        return;
+      }
+      robot_->is_goal_sent_ = true;
+      worker->goal_pose_ = NULL;
     }
+  }
+
+  // Check for inital pose updates every cycle
+  if (worker->initial_pose_) {
+    // set it to true, if not set before
+    std::cout << "Publishing initial pose to: " << robot_->robot_name_ << std::endl;
+    robot_->is_localized_ = true;
+    robot_->local_pos_pub_->publish(*worker->initial_pose_);
+    worker->initial_pose_ = NULL;
   }
 }
 
-void NeoFleetRViz2Plugin::handleButton1()
+void NeoFleetRViz2Plugin::launchRViz()
 {
   std::string command =
     "ros2 launch neo_nav2_bringup rviz_launch.py use_namespace:=True namespace:=";
-  command.append(robot_selected->robot_name);
+  command.append(robot_->robot_name_);
   command.append("&");
 
   system(command.c_str() );

@@ -35,25 +35,24 @@
 #ifndef NEOFLEETRVIZ2PLUGIN_HPP_
 #define NEOFLEETRVIZ2PLUGIN_HPP_
 
-#include "rviz_common/display_context.hpp"
+#include <QtWidgets>
+
 #include "rclcpp/rclcpp.hpp"
 #include "rviz_common/panel.hpp"
-#include "rviz_common/config.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
 #include "rviz_default_plugins/tools/goal_pose/goal_tool.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include "geometry_msgs/msg/transform_stamped.hpp"
 #include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "nav_msgs/msg/odometry.hpp"
-#include "QPushButton"
-#include "QThread"
-#include "QVBoxLayout"
-#include "QStringList"
-#include "QComboBox"
-#include "QLabel"
 #include "vector"
+#include "map"
 #include "memory"
 #include "string"
+#include "tf2_ros/transform_listener.h"
+#include "tf2_ros/create_timer_ros.h"
+#include "tf2_ros/buffer.h"
 
 
 class QLineEdit;
@@ -63,42 +62,29 @@ namespace neo_fleet
 class RosHelper
 {
 private:
-  rclcpp::Node::SharedPtr node;
+  rclcpp::Node::SharedPtr node_;
 
 public:
-  geometry_msgs::msg::PoseWithCovariance m_pose;
-  rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr m_pub_loc_pose;
-  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr m_pub_goal_pose;
+  rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr local_pos_pub_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pos_pub_;
   rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SharedPtr navigation_action_client_;
   nav2_msgs::action::NavigateToPose::Goal navigation_goal_;
+  geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr initial_pose_;
 
-  bool m_robotLocalization = false;
-  bool m_goalSent = false;
+  bool is_localized_ = true;
+  bool is_goal_sent_ = false;
+  std::string robot_name_;
 
-  std::string robot_name;
-
-  // Default Constructor
   RosHelper() {}
 
-  RosHelper(rclcpp::Node::SharedPtr node_, std::string robot_name_)
+  RosHelper(rclcpp::Node::SharedPtr node, std::string robot_name)
   {
-    node = node_;
-    robot_name = robot_name_;
-    m_pub_loc_pose = node->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(
-      "/" + robot_name + "/initialpose", 10);
-    m_pub_goal_pose = node->create_publisher<geometry_msgs::msg::PoseStamped>(
-      "/" + robot_name + "/goal_pose", 10);
-    odom_subscriber = node->create_subscription<nav_msgs::msg::Odometry>(
-      "/" + robot_name +
-      "/odom", 1, std::bind(&RosHelper::map_pose_callback, this, std::placeholders::_1));
+    node_ = node;
+    robot_name_ = robot_name;
+    local_pos_pub_ = node_->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(
+      "/" + robot_name_ + "/initialpose", 10);
     navigation_action_client_ = rclcpp_action::create_client<nav2_msgs::action::NavigateToPose>(
-      node, "/" + robot_name + "/navigate_to_pose");
-  }
-
-  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_subscriber;
-  void map_pose_callback(const nav_msgs::msg::Odometry::SharedPtr pose)
-  {
-    m_pose = pose->pose;
+      node_, "/" + robot_name_ + "/navigate_to_pose");
   }
 };
 
@@ -110,25 +96,22 @@ class Worker : public QObject
 public:
   Worker();
   ~Worker();
-  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr m_initial_pose;
-  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr m_goal_pose;
-  geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr m_pose;
-  geometry_msgs::msg::PoseStamped::SharedPtr m_goal;
+  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr initial_pose_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pos_sub_;
+  geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr initial_pose_;
+  geometry_msgs::msg::PoseStamped::SharedPtr goal_pose_;
 
   void pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose);
   void goal_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose);
-  void checkAndStoreRobot(std::string robot_name);
+  void checkAndStoreRobot(const std::string & robot_name);
 
-  rclcpp::Node::SharedPtr node = rclcpp::Node::make_shared("neo_fleet_thread");
+  rclcpp::Node::SharedPtr node_ = rclcpp::Node::make_shared("neo_fleet_thread");
+  std::vector<std::shared_ptr<RosHelper>> robots_;
+  std::map<std::string, std::shared_ptr<RosHelper>> robot_identity_map_;
+  std::vector<std::string> robot_namespaces_;
 
-  std::vector<std::shared_ptr<RosHelper>> m_robots;
-
-  std::map<std::string, std::shared_ptr<RosHelper>> m_named_robot;
-
-  std::vector<std::string> robot_namespaces;
-
-  // Hardcoding the robot list - This later needs to be automized
-  std::vector<std::string> available_robots = {"mpo_700", "mpo_500", "mp_400"};
+  // ToDo: Hardcoding the robot list - This later needs to be automized
+  std::vector<std::string> available_robots_ = {"robot0", "robot1", "robot2"};
 
 public slots:
   void process();
@@ -145,60 +128,40 @@ class NeoFleetRViz2Plugin : public rviz_common::Panel
 
 public:
   explicit NeoFleetRViz2Plugin(QWidget * parent = 0);
-
   ~NeoFleetRViz2Plugin();
-
   virtual void load(const rviz_common::Config & config);
   virtual void save(rviz_common::Config config) const;
 
   QThread * thread = new QThread;
   Worker * worker = new Worker();
-
-  std::shared_ptr<RosHelper> robot_selected;
+  std::shared_ptr<RosHelper> robot_;
+  rclcpp::Node::SharedPtr client_node_;
 
 public slots:
   void update();
 
 protected Q_SLOTS:
   void setRobotName();
+  void launchRViz();
 
-  void setX();
+private:
+  QLineEdit * output_status_editor_{nullptr};
+  QLabel * robot_location_{nullptr};
+  QLabel * selected_robot_{nullptr};
+  QLabel * warn_signal_{nullptr};
+  QComboBox * robot_container_{nullptr};
+  QHBoxLayout * topic_layout_{nullptr};
+  QVBoxLayout * main_layout_{nullptr};
+  QVBoxLayout * side_layout_{nullptr};
+  QPushButton * start_rviz_{nullptr};
+  QStringList robot_list_;
 
-  void setY();
-
-  void setTheta();
-
-  void handleButton1();
-
-  void handleButton2();
-
-  void subscribe_topics();
-
-  // Here we declare some internal slots.
-
-protected:
-  // One-line text editor for displaying the name of the robot.
-  QLineEdit * output_status_editor_;
-  QLabel * X_loc_value = new QLabel;
-  QLabel * selected_robot = new QLabel;
-  bool mLocalization = false;
-  bool m_localization_done = false;
-  QVBoxLayout * layout1 = new QVBoxLayout;
-
-
-  // The current name of the output topic.
-  QString output_status_;
-
-  // List of robots available
-  QStringList robot_list;
-
-  QComboBox * combo;
-
-  std::string robot_name;
-
+  bool process_combo_ = false;
+  std::string robot_name_;
   std::thread thread_func;
-
-  bool process_combo = false;
+  std::shared_ptr<tf2_ros::Buffer> tf2_buffer_;
+  std::shared_ptr<tf2_ros::TransformListener> transform_listener_;
+  std::chrono::milliseconds server_timeout_;
 };
 
 }  // namespace neo_fleet
