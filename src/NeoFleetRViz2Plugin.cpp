@@ -241,7 +241,7 @@ void NeoFleetRViz2Plugin::update()
     // setting it to true, even if the robot is already localized
     robot_->is_localized_ = true;
     robot_pose = tf2_buffer_->lookupTransform(
-      "map", robot_->robot_name_ + "/base_footprint",
+      "map", robot_->robot_name_ + "base_footprint",
       tf2::TimePointZero);
   } catch (const tf2::TransformException & ex) {
     RCLCPP_INFO(
