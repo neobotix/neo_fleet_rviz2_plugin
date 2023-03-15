@@ -250,13 +250,6 @@ void NeoFleetRViz2Plugin::send_goal()
         send_goal_options);
 
       worker->goal_pose_ = NULL;
-
-      if (rclcpp::spin_until_future_complete(client_node_, future_goal_handle, server_timeout_) !=
-        rclcpp::FutureReturnCode::SUCCESS)
-      {
-        RCLCPP_ERROR(client_node_->get_logger(), "Send goal call failed");
-        return;
-      } 
     }
 }
 
