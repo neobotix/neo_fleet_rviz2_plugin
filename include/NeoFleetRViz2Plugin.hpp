@@ -117,7 +117,8 @@ public slots:
   void process();
 
 signals:
-  void finished();
+  void send_pos();
+  void send_goal();
   void data_recieved();
   void error(QString err);
 };
@@ -138,7 +139,8 @@ public:
   rclcpp::Node::SharedPtr client_node_;
 
 public slots:
-  void update();
+  void update_pos();
+  void send_goal();
 
 protected Q_SLOTS:
   void setRobotName();

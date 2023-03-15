@@ -129,7 +129,7 @@ void Worker::process()
   while (rclcpp::ok()) {
     loop_rate.sleep();
     rclcpp::spin_some(node_);
-    emit finished();
+    emit send_pos();
   }
 }
 
@@ -180,10 +180,11 @@ NeoFleetRViz2Plugin::NeoFleetRViz2Plugin(QWidget * parent)
   worker->moveToThread(thread);
   // connect(worker, SIGNAL(error(QString)), this, SLOT(errorString(QString)));
   connect(thread, SIGNAL(started()), worker, SLOT(process()));
-  connect(worker, &Worker::finished, this, &NeoFleetRViz2Plugin::update);
-  connect(worker, SIGNAL(finished()), thread, SLOT(quit()));
-  connect(worker, SIGNAL(finished()), worker, SLOT(deleteLater()));
-  connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
+  connect(worker, &Worker::send_pos, this, &NeoFleetRViz2Plugin::update_pos);
+  connect(worker, &Worker::send_goal, this, &NeoFleetRViz2Plugin::send_goal);
+  connect(worker, SIGNAL(send_pos()), thread, SLOT(quit()));
+  connect(worker, SIGNAL(send_pos()), worker, SLOT(deleteLater()));
+  connect(thread, SIGNAL(send_pos()), thread, SLOT(deleteLater()));
   thread->start();
 }
 
@@ -194,6 +195,7 @@ NeoFleetRViz2Plugin::~NeoFleetRViz2Plugin()
 void Worker::goal_callback(const geometry_msgs::msg::PoseStamped::SharedPtr pose)
 {
   goal_pose_ = pose;
+  emit send_goal();
 }
 
 void Worker::pose_callback(const geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr pose)
@@ -221,7 +223,37 @@ void NeoFleetRViz2Plugin::setRobotName()
   }
 }
 
-void NeoFleetRViz2Plugin::update()
+void NeoFleetRViz2Plugin::send_goal()
+{
+  geometry_msgs::msg::PoseStamped pub_goal_pose;
+
+  if (worker->goal_pose_) {
+      pub_goal_pose = *worker->goal_pose_;
+      auto check_action_server_ready =
+        robot_->navigation_action_client_->wait_for_action_server(std::chrono::seconds(5));
+      if (!check_action_server_ready) {
+        RCLCPP_ERROR(
+          worker->node_->get_logger(),
+          "navigate_to_pose action server is not available."
+        );
+        return;
+      }
+
+      robot_->navigation_goal_.pose = pub_goal_pose;
+
+      auto send_goal_options =
+        rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SendGoalOptions();
+
+      auto future_goal_handle =
+        robot_->navigation_action_client_->async_send_goal(
+        robot_->navigation_goal_,
+        send_goal_options);
+
+      worker->goal_pose_ = NULL;
+    }
+}
+
+void NeoFleetRViz2Plugin::update_pos()
 {
   if (!process_combo_) {
     for (int i = 0; i < worker->robot_namespaces_.size(); i++) {
@@ -257,7 +289,6 @@ void NeoFleetRViz2Plugin::update()
     selected_robot_->setText(
       QString::fromStdString("Selected Robot: " + robot_->robot_name_));
   } else {
-    geometry_msgs::msg::PoseStamped pub_goal_pose;
     selected_robot_->setText(
       "Selected Robot: " +
       QString::fromStdString(robot_->robot_name_));
@@ -265,41 +296,6 @@ void NeoFleetRViz2Plugin::update()
       "X: " + QString::number(robot_pose.transform.translation.x) +
       ", Y: " + QString::number(robot_pose.transform.translation.y) +
       ", Theta: " + QString::number(robot_pose.transform.rotation.z));
-
-    if (worker->goal_pose_ && robot_->is_goal_sent_ == false) {
-      pub_goal_pose = *worker->goal_pose_;
-      auto check_action_server_ready =
-        robot_->navigation_action_client_->wait_for_action_server(std::chrono::seconds(5));
-      if (!check_action_server_ready) {
-        RCLCPP_ERROR(
-          worker->node_->get_logger(),
-          "navigate_to_pose action server is not available."
-        );
-        return;
-      }
-
-      robot_->navigation_goal_.pose = pub_goal_pose;
-
-      auto send_goal_options =
-        rclcpp_action::Client<nav2_msgs::action::NavigateToPose>::SendGoalOptions();
-      send_goal_options.result_callback = [this](auto) {
-          robot_->is_goal_sent_ = false;
-        };
-
-      auto future_goal_handle =
-        robot_->navigation_action_client_->async_send_goal(
-        robot_->navigation_goal_,
-        send_goal_options);
-
-      if (rclcpp::spin_until_future_complete(client_node_, future_goal_handle, server_timeout_) !=
-        rclcpp::FutureReturnCode::SUCCESS)
-      {
-        RCLCPP_ERROR(client_node_->get_logger(), "Send goal call failed");
-        return;
-      }
-      robot_->is_goal_sent_ = true;
-      worker->goal_pose_ = NULL;
-    }
   }
 
   // Check for inital pose updates every cycle
